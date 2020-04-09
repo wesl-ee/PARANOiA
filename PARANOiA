@@ -1,7 +1,21 @@
 #!/bin/bash
 
 CONF_DIR="/etc/PARANOiA/"
+ERROR_KAOMOJI=$(cat <<END
+(＃＞＜)
+(＞ｍ＜)
+(〃＞＿＜;〃)
+(*・ω・)ﾉ
+(ノωヽ)
+END
+)
+
+# System-wide configuration
 source "$CONF_DIR/paranoia.conf"
+
+function error_kaomoji {
+	STATUS_FACE=$(echo "$ERROR_KAOMOJI"| shuf -n 1)
+}
 
 # Mounts the removable drive
 function mountparanoia {
@@ -49,8 +63,9 @@ new key, please type YES [all caps]:
 END
 		read -p "Really delete? [YES/no]: " reallydoit
 		if [[ $reallydoit != "YES" ]]; then
+			error_kaomoji
 			cat <<END
-Got it, then I'm not touching anything! (*・ω・)ﾉ
+Got it, then I'm not touching anything! $STATUS_FACE
 END
 			unmountparanoia $HALFKEY_SPOT
 			exit 0
@@ -153,8 +168,9 @@ END
 
 	source "$devfile"
 	if [[ -z "$DEVICE_PATH" ]]; then
+		error_kaomoji
 		cat <<END
-Couldn't stat file at $DEVICE_PATH; that's weird! (＃＞＜)
+Couldn't stat file at $DEVICE_PATH; that's weird! $STATUS_FACE
 END
 	shred -u "$unlock"
 	exit 1
