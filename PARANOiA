@@ -1,0 +1,113 @@
+#!/bin/bash
+
+CONF_DIR="/etc/PARANOiA/"
+source "$CONF_DIR/paranoia.conf"
+
+# PARANOiA init [left] [right]
+if [[ $1 == "init" ]]; then
+	left="$2"
+	right="$3"
+	klen=45
+
+	if [[ -z "$1" && -z "$2" ]]; then
+		echo "Usage: PARANOiA create [img] [img]"
+		echo "Embeds two pictures each with a cryptographic half-key"
+		echo "Stored in the ImageDescription EXIF data section"
+		exit 1
+	fi
+
+	mkdir /mnt/half-key
+	mount "$CONF_USB" /mnt/half-key
+	mkdir "/mnt/half-key/PARANOiA"
+
+	lkey=$(openssl rand -base64 $klen)
+	rkey=$(openssl rand -base64 $klen)
+
+	echo "Converting pictures to common formats..."
+	convert "$left" -resize 500x500 -quality 90% /tmp/left-half.jpg
+	convert "$right" -resize 500x500 -quality 90% /tmp/right-half.jpg
+
+	echo "Embedding key metadata..."
+	exif -c --ifd=0 --set-value="$lkey" -t ImageDescription -m \
+		-o left-half.jpg /tmp/left-half.jpg > /dev/null 2>&1
+	exif -c --ifd=0 --set-value="$rkey" -t ImageDescription -m \
+		-o right-half.jpg /tmp/right-half.jpg > /dev/null 2>&1
+	shred -u /tmp/left-half.jpg /tmp/right-half.jpg
+
+	# Consolidate
+	mv "left-half.jpg" "/mnt/half-key/PARANOiA/"
+	mv "right-half.jpg" "$CONF_DIR/"
+
+	umount /mnt/half-key && rm -r /mnt/half-key
+
+fi
+
+# PARANOiA add [device|file] [friendlyname]
+if [[ $1 == "add" ]]; then
+	device="$2"
+	friendlyname="$3"
+
+	mkdir /mnt/half-key
+	mount "$CONF_USB" /mnt/half-key
+
+	left="/mnt/half-key/PARANOiA/left-half.jpg"
+	right="$CONF_DIR/right-half.jpg"
+	unlock="key.asc"
+
+	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
+	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
+	echo "$lkey$rkey" > $unlock
+
+	echo "Adding your key to: $device"
+	cryptsetup luksAddKey "$device" "$unlock"
+
+	cat <<END > "$CONF_DIR/devices/$friendlyname.conf"
+DEVICE_TYPE=file
+DEVICE_PATH="$device"
+DEVICE_NAME="$friendlyname"
+END
+
+	umount /mnt/half-key && rm -r /mnt/half-key
+	shred -u "$unlock"
+fi
+
+if [[ "$1" == "unlock-all" ]]; then
+
+	mkdir /mnt/half-key
+	mount "$CONF_USB" /mnt/half-key
+
+	left="/mnt/half-key/PARANOiA/left-half.jpg"
+	right="$CONF_DIR/right-half.jpg"
+	unlock="key.asc"
+
+	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
+	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
+	echo "$lkey$rkey" > $unlock
+
+	for f in $CONF_DIR/devices/*; do
+		source "$f"
+		printf "$DEVICE_PATH -> /dev/mapper/$DEVICE_NAME\n"
+		cryptsetup open --key-file "$unlock" "$DEVICE_PATH" "$DEVICE_NAME"
+	done
+
+	umount /mnt/half-key && rm -r /mnt/half-key
+	shred -u "$unlock"
+fi
+
+if [[ "$1" == "help" ]]; then
+	cat <<END
+Usage: PARANOiA [command] [...]
+PARANOiA is a cryptosystem for securing LUKS devices using a "double half-key"
+system split between the host-system and a flash drive.
+
+Configuration read from: /etc/PARANOiA/paranoia.conf
+
+Commands:
+	add [device|file] [name]
+		Allows the luks container to be unlocked by the PARANOiA system
+	init [left] [right]
+		Initialize the PARANOiA system with the [left] and [right] images
+	unlock-all
+		Attempt to unlock all devices known to the PARANOiA system
+END
+fi
