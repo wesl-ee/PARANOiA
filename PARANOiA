@@ -3,23 +3,61 @@
 CONF_DIR="/etc/PARANOiA/"
 source "$CONF_DIR/paranoia.conf"
 
+# Mounts the removable drive
+function mountparanoia {
+	drive="$1"
+
+	HALFKEY_SPOT="/mnt/half-key"
+	[[ ! -d "$HALFKEY_SPOT" ]] && mkdir "$HALFKEY_SPOT"
+	mount "$drive" "$HALFKEY_SPOT"
+	[[ ! -d "$HALFKEY_SPOT/PARANOiA" ]] && mkdir "$HALFKEY_SPOT/PARANOiA"
+}
+
+# Unmounts the removable drive
+function unmountparanoia {
+	umount "$HALFKEY_SPOT" &&
+		[[ ! "$(ls -A $HALFKEY_SPOT)" ]] && rm -r "$HALFKEY_SPOT"
+	unset HALFKEY_SPOT
+}
+
 # PARANOiA init [left] [right]
 if [[ $1 == "init" ]]; then
 	left="$2"
 	right="$3"
 	klen=45
 
-	if [[ -z "$1" && -z "$2" ]]; then
-		echo "Usage: PARANOiA create [img] [img]"
-		echo "Embeds two pictures each with a cryptographic half-key"
-		echo "Stored in the ImageDescription EXIF data section"
+	if [[ -z "$left" || -z "$right" ]]; then
+		# Check parameters for completeness
+		cat <<END
+Usage: PARANOiA init [img] [img]
+Embeds two pictures each with a cryptographic half-key stored in the
+ImageDescription EXIF data section and uses them to initialize the
+PARANOiA cryptosystem
+END
 		exit 1
 	fi
 
-	mkdir /mnt/half-key
-	mount "$CONF_USB" /mnt/half-key
-	mkdir "/mnt/half-key/PARANOiA"
+	# Mount the drive
+	mountparanoia "$CONF_USB"
 
+	if [[ ! -z "$HALFKEY_SPOT/PARANOiA/right-half.jpg" ||
+		! -z "$CONF_DIR/left-half.jpg" ]]; then
+		cat <<END
+You seem to already have a PARANOiA key installed! Please check this key (at
+$CONF_DIR and/or on your device ($CONF_USB); if you REALLY want to generate a
+new key, please type YES [all caps]:
+END
+		read -p "Really delete? [YES/no]: " reallydoit
+		if [[ $reallydoit != "YES" ]]; then
+			cat <<END
+Got it, then I'm not touching anything! (*・ω・)ﾉ
+END
+			unmountparanoia $HALFKEY_SPOT
+			exit 0
+		fi
+	fi
+
+	# Key generation...
 	lkey=$(openssl rand -base64 $klen)
 	rkey=$(openssl rand -base64 $klen)
 
@@ -35,11 +73,10 @@ if [[ $1 == "init" ]]; then
 	shred -u /tmp/left-half.jpg /tmp/right-half.jpg
 
 	# Consolidate
-	mv "left-half.jpg" "/mnt/half-key/PARANOiA/"
+	mv "left-half.jpg" "$HALFKEY_SPOT/PARANOiA/"
 	mv "right-half.jpg" "$CONF_DIR/"
 
-	umount /mnt/half-key && rm -r /mnt/half-key
-
+	unmountparanoia "$halfkeymount"
 fi
 
 # PARANOiA add [device|file] [friendlyname]
@@ -47,10 +84,9 @@ if [[ $1 == "add" ]]; then
 	device="$2"
 	friendlyname="$3"
 
-	mkdir /mnt/half-key
-	mount "$CONF_USB" /mnt/half-key
+	mountparanoia "$CONF_USB"
 
-	left="/mnt/half-key/PARANOiA/left-half.jpg"
+	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
 	right="$CONF_DIR/right-half.jpg"
 	unlock="key.asc"
 
@@ -58,25 +94,24 @@ if [[ $1 == "add" ]]; then
 	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
 	echo "$lkey$rkey" > $unlock
 
-	echo "Adding your key to: $device"
+	echo "Adding your key to the LUKS device: $device"
 	cryptsetup luksAddKey "$device" "$unlock"
 
+	[[ ! -d "$CONF_DIR/devices" ]] && mkdir "$CONF_DIR/devices"
 	cat <<END > "$CONF_DIR/devices/$friendlyname.conf"
 DEVICE_TYPE=file
 DEVICE_PATH="$device"
 DEVICE_NAME="$friendlyname"
 END
 
-	umount /mnt/half-key && rm -r /mnt/half-key
+	unmountparanoia
 	shred -u "$unlock"
 fi
 
 if [[ "$1" == "unlock-all" ]]; then
+	mountparanoia "$CONF_USB"
 
-	mkdir /mnt/half-key
-	mount "$CONF_USB" /mnt/half-key
-
-	left="/mnt/half-key/PARANOiA/left-half.jpg"
+	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
 	right="$CONF_DIR/right-half.jpg"
 	unlock="key.asc"
 
@@ -86,11 +121,13 @@ if [[ "$1" == "unlock-all" ]]; then
 
 	for f in $CONF_DIR/devices/*; do
 		source "$f"
-		printf "$DEVICE_PATH -> /dev/mapper/$DEVICE_NAME\n"
 		cryptsetup open --key-file "$unlock" "$DEVICE_PATH" "$DEVICE_NAME"
+		cat <<END
+Unlocked $DEVICE_PATH (/dev/mapper/$DEVICE_NAME)
+END
 	done
 
-	umount /mnt/half-key && rm -r /mnt/half-key
+	unmountparanoia "$HALFKEY_SPOT"
 	shred -u "$unlock"
 fi
 
