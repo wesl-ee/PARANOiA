@@ -131,6 +131,41 @@ END
 	shred -u "$unlock"
 fi
 
+if [[ "$1" == "unlock" ]]; then
+	device="$2"
+	mountparanoia "$CONF_USB"
+
+	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
+	right="$CONF_DIR/right-half.jpg"
+	unlock="key.asc"
+
+	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
+	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
+	echo "$lkey$rkey" > $unlock
+
+	devfile="$CONF_DIR/devices/$device.conf"
+	if [[ -z "$devfile" ]]; then
+		cat <<END
+No such file $devfile; have you added it to the cryptosystem yet? (hint:
+PARANOiA add)...
+END
+	fi
+
+	source "$devfile"
+	if [[ -z "$DEVICE_PATH" ]]; then
+		cat <<END
+Couldn't stat file at $DEVICE_PATH; that's weird! (＃＞＜)
+END
+	shred -u "$unlock"
+	exit 1
+	fi
+
+	cryptsetup open --key-file "$unlock" "$DEVICE_PATH" "$device"
+
+	unmountparanoia "$HALFKEY_SPOT"
+	shred -u "$unlock"
+fi
+
 if [[ "$1" == "help" ]]; then
 	cat <<END
 Usage: PARANOiA [command] [...]
