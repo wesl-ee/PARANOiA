@@ -67,8 +67,10 @@ cd PARANOiA
 
 # As super-user
 mkdir /etc/PARANOiA && cp -r conf-example/* /etc/PARANOiA/
-
 ```
+
+### Configuration
+
 Once installed, download two pictures which will hold your half-keys; the
 PARANOiA system will scale these pictures down and convert them to common
 (JPEG) formats so you need not worry about formatting or size.
