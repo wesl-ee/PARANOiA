@@ -195,7 +195,7 @@ END
 fi
 
 if [[ "$1" == "unlock" ]]; then
-	name="$2"
+	device="$2"
 	mountparanoia "$CONF_USB"
 
 	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
@@ -245,7 +245,7 @@ END
 		exit 1
 	fi
 
-	cryptsetup open --key-file "$unlock" "$device" "$name"
+	cryptsetup open --key-file "$unlock" "$device" "$DEVICE_NAME"
 
 	unmountparanoia "$HALFKEY_SPOT"
 	shred -u "$unlock"
@@ -266,5 +266,7 @@ Commands:
 		Initialize the PARANOiA system with the [left] and [right] images
 	unlock-all
 		Attempt to unlock all devices known to the PARANOiA system
+	unlock [name]
+		Unlock only the disk with the friendly name "name"
 END
 fi
