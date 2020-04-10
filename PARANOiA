@@ -10,12 +10,20 @@ ERROR_KAOMOJI=$(cat <<END
 END
 )
 
-# System-wide configuration
-source "$CONF_DIR/paranoia.conf"
-
 function error_kaomoji {
 	STATUS_FACE=$(echo "$ERROR_KAOMOJI"| shuf -n 1)
 }
+
+# System-wide configuration
+if [[ ! -e "$CONF_DIR/paranoia.conf" ]]; then
+	error_kaomoji
+	cat <<END
+Could not load configuration: $CONF_DIR/paranoia.conf
+END
+	exit 1
+fi
+
+source "$CONF_DIR/paranoia.conf"
 
 # Mounts the removable drive
 function mountparanoia {
@@ -40,7 +48,7 @@ if [[ $1 == "init" ]]; then
 	right="$3"
 	klen=45
 
-	if [[ -z "$left" || -z "$right" ]]; then
+	if [[ ! -f "$left" || ! -f "$right" ]]; then
 		# Check parameters for completeness
 		cat <<END
 Usage: PARANOiA init [img] [img]
@@ -54,8 +62,8 @@ END
 	# Mount the drive
 	mountparanoia "$CONF_USB"
 
-	if [[ ! -z "$HALFKEY_SPOT/PARANOiA/right-half.jpg" ||
-		! -z "$CONF_DIR/left-half.jpg" ]]; then
+	if [[ -f "$HALFKEY_SPOT/PARANOiA/right-half.jpg" ||
+		-f "$CONF_DIR/left-half.jpg" ]]; then
 		cat <<END
 You seem to already have a PARANOiA key installed! Please check this key (at
 $CONF_DIR and/or on your device ($CONF_USB); if you REALLY want to generate a
@@ -99,6 +107,19 @@ if [[ $1 == "add" ]]; then
 	device="$2"
 	friendlyname="$3"
 
+	# Determine device type (FS label or block device)
+	if [[ -e "$device" ]]; then
+		devtype="file"
+	else
+		devtype="label"
+		if ! device=$(findfs "$device"); then
+			cat <<END
+No such device or filesystem
+END
+			exit 1
+		fi
+	fi
+
 	mountparanoia "$CONF_USB"
 
 	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
@@ -114,7 +135,7 @@ if [[ $1 == "add" ]]; then
 
 	[[ ! -d "$CONF_DIR/devices" ]] && mkdir "$CONF_DIR/devices"
 	cat <<END > "$CONF_DIR/devices/$friendlyname.conf"
-DEVICE_TYPE=file
+DEVICE_TYPE="$devtype"
 DEVICE_PATH="$device"
 DEVICE_NAME="$friendlyname"
 END
@@ -136,7 +157,34 @@ if [[ "$1" == "unlock-all" ]]; then
 
 	for f in $CONF_DIR/devices/*; do
 		source "$f"
-		cryptsetup open --key-file "$unlock" "$DEVICE_PATH" "$DEVICE_NAME"
+	# Determine device type (FS label or block device)
+		if [[ "$DEVICE_TYPE" == "file" ]]; then
+			device="$DEVICE_PATH"
+		elif [[ "$DEVICE_TYPE" == "label" ]]; then
+			if ! device=$(findfs "$DEVICE_PATH"); then
+			error_kaomoji
+			cat <<END
+No such device or filesystem $STATUS_FACE
+END
+			continue
+			fi
+		else
+			error_kaomoji
+			cat <<END
+Device type of $f ($DEVICE_TYPE) not recognized $STATUS_FACE
+END
+			continue
+		fi
+
+		if [[ ! -e "$device" ]]; then
+			error_kaomoji
+			cat <<END
+Device not found: $device
+END
+			continue
+		fi
+
+		cryptsetup open --key-file "$unlock" "$device" "$DEVICE_NAME"
 		cat <<END
 Unlocked $DEVICE_PATH (/dev/mapper/$DEVICE_NAME)
 END
@@ -147,7 +195,7 @@ END
 fi
 
 if [[ "$1" == "unlock" ]]; then
-	device="$2"
+	name="$2"
 	mountparanoia "$CONF_USB"
 
 	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
@@ -159,7 +207,7 @@ if [[ "$1" == "unlock" ]]; then
 	echo "$lkey$rkey" > $unlock
 
 	devfile="$CONF_DIR/devices/$device.conf"
-	if [[ -z "$devfile" ]]; then
+	if [[ ! -f "$devfile" ]]; then
 		cat <<END
 No such file $devfile; have you added it to the cryptosystem yet? (hint:
 PARANOiA add)...
@@ -167,16 +215,37 @@ END
 	fi
 
 	source "$devfile"
-	if [[ -z "$DEVICE_PATH" ]]; then
+
+	# Determine device type (FS label or block device)
+	if [[ "$DEVICE_TYPE" == "file" ]]; then
+		device="$DEVICE_PATH"
+	elif [[ "$DEVICE_TYPE" == "label" ]]; then
+		if ! device=$(findfs "$DEVICE_PATH"); then
+			error_kaomoji
+			cat <<END
+No such device or filesystem $STATUS_FACE
+END
+			shred -u "$unlock"
+			exit 1
+		fi
+	else
 		error_kaomoji
 		cat <<END
-Couldn't stat file at $DEVICE_PATH; that's weird! $STATUS_FACE
+Device type of $f ($DEVICE_TYPE) not recognized $STATUS_FACE
 END
-	shred -u "$unlock"
-	exit 1
+		shred -u "$unlock"
+		exit 1
 	fi
 
-	cryptsetup open --key-file "$unlock" "$DEVICE_PATH" "$device"
+	if [[ ! -e "$device" ]]; then
+		error_kaomoji
+		cat <<END
+Device not found: $device
+END
+		exit 1
+	fi
+
+	cryptsetup open --key-file "$unlock" "$device" "$name"
 
 	unmountparanoia "$HALFKEY_SPOT"
 	shred -u "$unlock"
