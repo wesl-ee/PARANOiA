@@ -35,24 +35,51 @@ creating plausible deniability in the absence of other keys or passphrases.
 Installation
 ------------
 
-Ensure you have all the requisites satisfied; once verified, download two
-(cute!) pictures which will hold your half-keys; the PARANOiA system will
-scale these pictures down and convert them to common (JPEG) formats so you
-need not worry about formatting or size.
+### Portage
 
-Firstly create your own copy of the configuration file:
+If you are using a portage-based distribution (e.g. Funtoo, Gentoo) then you may
+install PARANOiA from my
+[`raleigh-overlay`](https://github.com/wesleycoakley/raleigh-overlay) for
+Poratge. Use the `layman` tool to install my overlay, then run
 
 ```
+emerge sys-fs/paranoia
+```
+
+This will install the shell script and move all documentation to
+`/usr/share/doc/paranoia-[version]`; to install the example configuration,
+simply run:
+
+```
+mkdir /etc/PARANOiA && \
+	bzcat /usr/share/doc/paranoia-[version]/paranoia.conf.bz2 > \
+	/etc/PARANOiA/paranoia.conf
+```
+
+### Installation from source
+
+Ensure you have satisfied all the dependencies. Then install this repository and
+the included configuration:
+
+```
+git clone https://github.com/wesleycoakley/PARANOiA
+cd PARANOiA
+
+# As super-user
 mkdir /etc/PARANOiA && cp -r conf-example/* /etc/PARANOiA/
-```
 
-All of the commands in this document should be run as the super-user.
+```
+Once installed, download two pictures which will hold your half-keys; the
+PARANOiA system will scale these pictures down and convert them to common
+(JPEG) formats so you need not worry about formatting or size.
+
+The remaining commands in this document should be run as the super-user.
 Next edit `/etc/PARANOiA/paranoia.conf` to reflect your system / encryption
 setup.
 
-Next identify / download two pictures which will each store one of your two
-half keys; move these into the current working directory, plug in the removable
-media which you want to be your PARANOiA drive and run:
+Then move the two pictures you want for each half into the current working
+directory, plug in the removable media which you want to be your PARANOiA
+drive and run:
 
 ```
 PARANOiA init picture-1 picture-2
@@ -75,4 +102,5 @@ License
 -------
 
 Wesley Coakley <w@wesleycoakley.com>
+
 All content is BSD 3-Clause (see `LICENSE`)
