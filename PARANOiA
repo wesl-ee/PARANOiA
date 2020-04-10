@@ -42,6 +42,18 @@ function unmountparanoia {
 	unset HALFKEY_SPOT
 }
 
+function extractkey {
+	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
+	right="$CONF_DIR/right-half.jpg"
+	unlock="key.asc"
+
+	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
+	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
+	echo "$lkey$rkey" > $unlock
+
+	KEYFILE="$unlock"
+}
+
 # PARANOiA init [left] [right]
 if [[ $1 == "init" ]]; then
 	left="$2"
@@ -121,17 +133,10 @@ END
 	fi
 
 	mountparanoia "$CONF_USB"
-
-	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
-	right="$CONF_DIR/right-half.jpg"
-	unlock="key.asc"
-
-	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
-	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
-	echo "$lkey$rkey" > $unlock
+	extractkey
 
 	echo "Adding your key to the LUKS device: $device"
-	cryptsetup luksAddKey "$device" "$unlock"
+	cryptsetup luksAddKey "$device" "$KEYFILE"
 
 	[[ ! -d "$CONF_DIR/devices" ]] && mkdir "$CONF_DIR/devices"
 	cat <<END > "$CONF_DIR/devices/$friendlyname.conf"
@@ -141,19 +146,12 @@ DEVICE_NAME="$friendlyname"
 END
 
 	unmountparanoia
-	shred -u "$unlock"
+	shred -u "$KEYFILE"
 fi
 
 if [[ "$1" == "unlock-all" ]]; then
 	mountparanoia "$CONF_USB"
-
-	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
-	right="$CONF_DIR/right-half.jpg"
-	unlock="key.asc"
-
-	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
-	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
-	echo "$lkey$rkey" > $unlock
+	extractkey
 
 	for f in $CONF_DIR/devices/*; do
 		source "$f"
@@ -184,27 +182,20 @@ END
 			continue
 		fi
 
-		cryptsetup open --key-file "$unlock" "$device" "$DEVICE_NAME"
+		cryptsetup open --key-file "$KEYFILE" "$device" "$DEVICE_NAME"
 		cat <<END
 Unlocked $DEVICE_PATH (/dev/mapper/$DEVICE_NAME)
 END
 	done
 
 	unmountparanoia "$HALFKEY_SPOT"
-	shred -u "$unlock"
+	shred -u "$KEYFILE"
 fi
 
 if [[ "$1" == "unlock" ]]; then
 	device="$2"
 	mountparanoia "$CONF_USB"
-
-	left="$HALFKEY_SPOT/PARANOiA/left-half.jpg"
-	right="$CONF_DIR/right-half.jpg"
-	unlock="key.asc"
-
-	lkey=$(exif --ifd=0 -t ImageDescription -m $left)
-	rkey=$(exif --ifd=0 -t ImageDescription -m $right)
-	echo "$lkey$rkey" > $unlock
+	extractkey
 
 	devfile="$CONF_DIR/devices/$device.conf"
 	if [[ ! -f "$devfile" ]]; then
@@ -245,10 +236,10 @@ END
 		exit 1
 	fi
 
-	cryptsetup open --key-file "$unlock" "$device" "$DEVICE_NAME"
+	cryptsetup open --key-file "$KEYFILE" "$device" "$DEVICE_NAME"
 
 	unmountparanoia "$HALFKEY_SPOT"
-	shred -u "$unlock"
+	shred -u "$KEYFILE"
 fi
 
 if [[ "$1" == "help" ]]; then
