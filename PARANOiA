@@ -31,6 +31,18 @@ function mountparanoia {
 
 	HALFKEY_SPOT="/mnt/half-key"
 	[[ ! -d "$HALFKEY_SPOT" ]] && mkdir "$HALFKEY_SPOT"
+
+	if [[ "$drive" == "UUID="* || "$drive" == "LABEL="* || "$drive" == \
+	"PARTLABEL="* || "$drive" == "PARTUUID="* ]]; then
+		realdrive=$(findfs "$drive")
+		if [[ $? -ne 0 ]]; then
+			echo "Half-key Drive ($drive) not found..."
+			exit 1
+		fi
+
+		drive=$realdrive
+	fi
+
 	mount "$drive" "$HALFKEY_SPOT"
 	[[ ! -d "$HALFKEY_SPOT/PARANOiA" ]] && mkdir "$HALFKEY_SPOT/PARANOiA"
 }
