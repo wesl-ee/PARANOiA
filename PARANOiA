@@ -263,8 +263,10 @@ system split between the host-system and a flash drive.
 Configuration read from: /etc/PARANOiA/paranoia.conf
 
 Commands:
-	add [device|file] [name]
+	add [device|file|identifier] [name]
 		Allows the luks container to be unlocked by the PARANOiA system
+		You may specify the device by UUID, PARTLABEL, LABEL, or it may
+		be a simple path to the device (or file) itself
 	init [left] [right]
 		Initialize the PARANOiA system with the [left] and [right] images
 	unlock-all

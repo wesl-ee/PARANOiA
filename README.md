@@ -72,14 +72,23 @@ mkdir /etc/PARANOiA && cp -r conf-example/* /etc/PARANOiA/
 ### Configuration
 
 Once installed, download two pictures which will hold your half-keys; the
-PARANOiA system will scale these pictures down and convert them to common
-(JPEG) formats so you need not worry about formatting or size.
+PARANOiA system will scale these pictures down and convert them to common (JPEG)
+formats so you need not worry about formatting or size. The remaining commands
+in this document should be run as the super-user.
 
-The remaining commands in this document should be run as the super-user.
-Next edit `/etc/PARANOiA/paranoia.conf` to reflect your system / encryption
-setup.
+Next edit `/etc/PARANOiA/paranoia.conf` to reflect your desired system /
+encryption setup. The most important setting in here is `CONF_USB`, which tells
+the system where the removable (right) half of the key should be stored. Ideally
+this should be a removable USB drive.
 
-Then move the two pictures you want for each half into the current working
+```
+# CONF_USB: identifies the removable media storing the other half of the
+# encryption key; this need not be a file-path, it can also be a UUID,
+# PARTLABEL,LABEL, or any other identifier usable with `findfs`
+CONF_USB="UUID=17D3-943E"
+```
+
+Now move the two pictures you want for each half into the current working
 directory, plug in the removable media which you want to be your PARANOiA
 drive and run:
 
@@ -90,6 +99,9 @@ PARANOiA init picture-1 picture-2
 This will generate a keyfile for use with the PARANOiA cryptosystem and embed
 half in each of `picture-1` `picture-2`. `picture-1` will be moved to your
 PARANOiA drive and `picture-2` will be stored on your local system.
+
+At this point nothing is encrypted; both halves for the new key should be
+installed however.
 
 ```
 PARANOiA add /dev/sdaX FriendlyName
